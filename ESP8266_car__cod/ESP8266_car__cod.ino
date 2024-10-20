@@ -4,11 +4,13 @@
 #include <ESP8266WebServer.h>
 #include <WebSocketsServer.h>
 #include <Hash.h>
-
+#include <Servo.h>
+#define ServoPort D1
 //SSID and Password to your ESP Access Point
 const char* ssid = "loki";
 const char* password = "lokireddy";
 
+Servo myservo;
 
 #define ENA   4     // Enable/speed motors Right    GPIO4(D2)
 #define IN_1  0     // L298N in1 motors Right       GPIO0(D3)
@@ -19,7 +21,7 @@ const char* password = "lokireddy";
 
 #define Light  16 // Light  GPIO16(D0)
 
-int speedCar = 150; // 0 to 255
+int speedCar = 255; // 0 to 255
 char Data;
 
 static const char PROGMEM INDEX_HTML[] = R"rawliteral(
@@ -28,6 +30,51 @@ static const char PROGMEM INDEX_HTML[] = R"rawliteral(
 <meta name = "viewport" content = "width = device-width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable=0">
 <title>ESP8266 Robot</title>
 <style>
+
+html {
+        font-family: Arial;
+        display: inline-block;
+        margin: 0px auto;
+        text-align: center;
+      }
+      
+      .slidecontainer {
+        width: 100%;
+      }
+
+      .slider {
+        -webkit-appearance: none;
+        width: 50%;
+        height: 15px;
+        border-radius: 5px;
+        background: #d3d3d3;
+        outline: none;
+        opacity: 0.7;
+        -webkit-transition: .2s;
+        transition: opacity .2s;
+      }
+
+      .slider:hover {
+        opacity: 1;
+      }
+
+      .slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        background: #4CAF50;
+        cursor: pointer;
+      }
+
+      .slider::-moz-range-thumb {
+        width: 25px;
+        height: 25px;
+        border-radius: 50%;
+        background: #4CAF50;
+        cursor: pointer;
+      }
 "body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }"
 #JD {
   text-align: center;
@@ -153,25 +200,33 @@ function buttonclick(e) {
       </label>
     </form></td>
 </tr>
-<tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr> <tr>
 
-        <td align="center" valign="middle"><form name="form1" method="post" action="">
-      <label>
-        <button id="o"  type="button" onclick="buttonclick(this);" class="button yellow">Light On</button> 
-      </label>
-    </form></td>
-      <td align="center" valign="middle"><form name="form1" method="post" action="">
-&nbsp;
-    </form></td>
-        <td align="center" valign="middle"><form name="form1" method="post" action="">
-      <label>
-        <button id="f"  type="button" onclick="buttonclick(this);" class="button yellow">Light Off</button> 
-      </label>
-    </form></td>
-  </tr>
-  
-</table>
-<p class="foot">hi im car</p>
+<div class="slidecontainer">
+      <input type="range" min="0" max="180" value="50" class="slider" id="myRange">
+      <p>Value : <span id="demo"></span></p>
+    </div>
+
+<script>
+      function sendData(pos) {
+        var xhttp = new XMLHttpRequest();
+        xhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            console.log(this.responseText);
+          }
+        };
+        xhttp.open("GET", "setPOS?servoPOS="+pos, true);
+        xhttp.send();
+      } 
+      var slider = document.getElementById("myRange");
+      var output = document.getElementById("demo");
+      output.innerHTML = slider.value;
+
+      slider.oninput = function() {
+        output.innerHTML = this.value;
+        sendData(output.innerHTML);
+      }
+    </script>
+
 </body>
 </html>
 )rawliteral";
@@ -179,10 +234,18 @@ function buttonclick(e) {
 WebSocketsServer webSocket = WebSocketsServer(81);
 ESP8266WebServer server(80);
 
-
+void handleServo(){
+  String POS = server.arg("servoPOS");
+  int pos = POS.toInt();
+  myservo.write(pos);   //--> Move the servo motor according to the POS value
+  delay(15);
+  Serial.print("Servo Angle:");
+  Serial.println(pos);
+  server.send(200, "text/plane","");
+}
 void setup() {
  Serial.begin(115200);
- 
+ myservo.attach(ServoPort);
  pinMode(ENA, OUTPUT); 
  pinMode(IN_1, OUTPUT);
  pinMode(IN_2, OUTPUT);
@@ -204,6 +267,8 @@ void setup() {
   Serial.print("IP address: ");   
   Serial.println(myIP);
 
+  server.on("/setPOS",handleServo); //--> Sets servo position from Web request
+  server.begin();  
   server.on("/", [](){
   server.send(200, "text/html", INDEX_HTML);
   });
